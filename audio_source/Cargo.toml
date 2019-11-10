@@ -1,11 +1,10 @@
 [package]
-name = "netaudio_sender"
-version = "0.1.0"
+name = "netaudio-source"
+version = "1.0.0"
 authors = ["Raffael Zica <raffael@pixeltastic.de>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 byteorder = "1.3.2"
 cpal = {git = "https://github.com/lucy/cpal"}
+getopts = "0.2"

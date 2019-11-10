@@ -7,11 +7,16 @@ use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
-use std::convert::TryInto;
+use getopts;
 
 type SampleType = f32;
 const UDP_BUFFER_SIZE: usize = 65507;
-const NETWORK_ADDRESS: &str = "0.0.0.0:11331";
+
+#[derive(Debug)]
+struct Config {
+    ip: Option<String>,
+    port: Option<u32>
+}
 
 struct AudioStream {
     data: VecDeque<SampleType>,
@@ -31,8 +36,8 @@ impl Iterator for AudioStream {
     type Item = SampleType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Ok(foo) = self.receiver.try_recv() {
-            self.data.extend(&foo);
+        if let Ok(sample) = self.receiver.try_recv() {
+            self.data.extend(&sample);
         }
         let out = self.data.pop_front();
         if out == None {
@@ -61,15 +66,49 @@ impl Source for AudioStream {
     }
 }
 
+
+fn print_usage(program: &str, opts: getopts::Options) {
+    let brief = format!("Usage: {} [options]", program);
+    print!("{}", opts.usage(&brief));
+}
+
 fn main() -> std::io::Result<()> {
-    let key = "DEBUG";
-    let debug = match std::env::var(key) {
+    let debug = match std::env::var("DEBUG") {
         Ok(val) => val == "1",
         Err(_) => false,
     };
     if debug {
         println!("Debug mode!");
     }
+
+    let args: Vec<String> = std::env::args().collect();
+    let program = args[0].clone();
+
+    let mut opts = getopts::Options::new();
+    opts.optopt("i", "ip", "ip the server will bind to", "IP");
+    opts.optopt("p", "port", "port the server will bind to", "PORT");
+    opts.optflag("h", "help", "print this help menu");
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => { m }
+        Err(f) => { panic!(f.to_string()) }
+    };
+    if matches.opt_present("h") {
+        print_usage(&program, opts);
+        return Ok(())
+    }
+
+    let ip = match matches.opt_str("i") {
+        Some(i) => i,
+        None => "0.0.0.0".to_owned()
+    };
+
+    let port = match matches.opt_str("p") {
+        Some(i) => i,
+        None => "11331".to_owned()
+    };
+
+    let netaddr = format!("{}:{}",ip,port);
+
     println!("NetAudio Server v1.0");
     let (tx, rx): (Sender<Vec<SampleType>>, Receiver<Vec<SampleType>>) = mpsc::channel();
     let mut buffer = Box::new([0; UDP_BUFFER_SIZE]);
@@ -86,8 +125,8 @@ fn main() -> std::io::Result<()> {
     let sink = Sink::new(&device);
     let source_stream = AudioStream::new(rx);
     let stream = UniformSourceIterator::<AudioStream,SampleType>::new(source_stream, device_format.channels, device_format.sample_rate.0);
-    println!("Binding to address: {}",NETWORK_ADDRESS);
-    let socket = UdpSocket::bind(NETWORK_ADDRESS).expect("Failed to bind network address");
+    println!("Binding to address: {}",netaddr);
+    let socket = UdpSocket::bind(netaddr).expect("Failed to bind network address");
     
     match device_format.data_type {
         SampleFormat::F32 => sink.append(stream.convert_samples::<f32>()),
@@ -122,6 +161,4 @@ fn main() -> std::io::Result<()> {
             }
         }
     }
-
-    Ok(())
 }
