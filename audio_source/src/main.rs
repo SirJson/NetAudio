@@ -4,9 +4,9 @@ use std::net::UdpSocket;
 
 fn main() -> std::io::Result<()> {
     println!("Connecting..");
-    let socket = UdpSocket::bind("127.0.0.1:11330").expect("couldn't bind to address");
+    let socket = UdpSocket::bind("0.0.0.0:0").expect("couldn't bind to address");
     socket
-        .connect("127.0.0.1:11331")
+        .connect("localhost:11331")
         .expect("connect function failed");
 
     println!("Start stream..");

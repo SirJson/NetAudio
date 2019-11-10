@@ -6,6 +6,7 @@ use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
+use std::convert::TryInto;
 
 type SampleType = f32;
 const UDP_BUFFER_SIZE: usize = 65507;
@@ -60,12 +61,26 @@ impl Source for AudioStream {
 }
 
 fn main() -> std::io::Result<()> {
+    let key = "DEBUG";
+    let debug = match std::env::var(key) {
+        Ok(val) => val == "1",
+        Err(_) => false,
+    };
+    if debug {
+        println!("Debug mode!");
+    }
     println!("NetAudio Server v1.0");
     let (tx, rx): (Sender<Vec<SampleType>>, Receiver<Vec<SampleType>>) = mpsc::channel();
     let mut buffer = Box::new([0; UDP_BUFFER_SIZE]);
 
     let device = rodio::default_output_device().expect("Failed to select default output device");
     println!("Output Device: {}",device.name());
+    let device_format = device.default_output_format().expect("No default output format!");
+    println!("Default format: {:?}", device_format);
+    let supported_formats = device.supported_output_formats().expect("No supported output formats!");
+    for format in supported_formats {
+        println!("\tSupported format: {:?}", format);
+    }
 
     let sink = Sink::new(&device);
     let stream = AudioStream::new(rx);
@@ -76,6 +91,8 @@ fn main() -> std::io::Result<()> {
     sink.append(stream);
     sink.play();
 
+    let mut now = std::time::Instant::now();
+
     println!("Starting main loop!");
     loop {
         let bytes_recv = match socket.recv_from(&mut *buffer) {
@@ -84,6 +101,10 @@ fn main() -> std::io::Result<()> {
             Err(e) => panic!("Encountered Network IO error: {}", e),
         };
         if bytes_recv > 0 {
+            if debug && now.elapsed().as_secs() > 5 {
+                println!("Bytes received: {}",bytes_recv);
+                now = std::time::Instant::now();
+            }
             let source = &mut buffer[..bytes_recv];
             if bytes_recv % 4 != 0 {
                 eprintln!("Bytes received is not a multiple of 4! Skipping packet...");
