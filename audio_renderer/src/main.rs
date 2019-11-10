@@ -1,6 +1,7 @@
 use byteorder::{ByteOrder, NetworkEndian};
 use rodio::Sink;
-use rodio::{Sample, Source};
+use cpal::SampleFormat;
+use rodio::{Sample, Source, source::UniformSourceIterator};
 use std::collections::VecDeque;
 use std::net::UdpSocket;
 use std::sync::mpsc;
@@ -83,12 +84,16 @@ fn main() -> std::io::Result<()> {
     }
 
     let sink = Sink::new(&device);
-    let stream = AudioStream::new(rx);
-
+    let source_stream = AudioStream::new(rx);
+    let stream = UniformSourceIterator::<AudioStream,SampleType>::new(source_stream, device_format.channels, device_format.sample_rate.0);
     println!("Binding to address: {}",NETWORK_ADDRESS);
     let socket = UdpSocket::bind(NETWORK_ADDRESS).expect("Failed to bind network address");
-
-    sink.append(stream);
+    
+    match device_format.data_type {
+        SampleFormat::F32 => sink.append(stream.convert_samples::<f32>()),
+        SampleFormat::I16 => sink.append(stream.convert_samples::<i16>()),
+        SampleFormat::U16 => sink.append(stream.convert_samples::<u16>())
+    }
     sink.play();
 
     let mut now = std::time::Instant::now();

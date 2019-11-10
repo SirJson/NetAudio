@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 byteorder = "1.3.2"
 toml = "0.5"
+cpal = "0.8"
 
 [dependencies.rodio]
 version = "0.9.0"
