@@ -72,6 +72,18 @@ fn print_usage(program: &str, opts: getopts::Options) {
     print!("{}", opts.usage(&brief));
 }
 
+
+fn print_capabilities() {
+    let device = rodio::default_output_device().expect("Failed to select default output device");
+    println!("Output Device: {}",device.name());
+    let device_format = device.default_output_format().expect("No default output format!");
+    println!("Default format: {:?}", device_format);
+    let supported_formats = device.supported_output_formats().expect("No supported output formats!");
+    for format in supported_formats {
+        println!("\tSupported format: {:?}", format);
+    }
+}
+
 fn main() -> std::io::Result<()> {
     let debug = match std::env::var("DEBUG") {
         Ok(val) => val == "1",
@@ -87,6 +99,8 @@ fn main() -> std::io::Result<()> {
     let mut opts = getopts::Options::new();
     opts.optopt("i", "ip", "ip the server will bind to", "IP");
     opts.optopt("p", "port", "port the server will bind to", "PORT");
+    opts.optopt("s", "samplerate", "specifies the output sample rate if supported", "SAMPLERATE");
+    opts.optflag("c", "capabilities", "prints a list of all possible formats of the default device");
     opts.optflag("h", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
@@ -94,6 +108,11 @@ fn main() -> std::io::Result<()> {
     };
     if matches.opt_present("h") {
         print_usage(&program, opts);
+        return Ok(())
+    }
+
+    if matches.opt_present("c") {
+        print_capabilities();
         return Ok(())
     }
 
@@ -115,12 +134,20 @@ fn main() -> std::io::Result<()> {
 
     let device = rodio::default_output_device().expect("Failed to select default output device");
     println!("Output Device: {}",device.name());
-    let device_format = device.default_output_format().expect("No default output format!");
-    println!("Default format: {:?}", device_format);
-    let supported_formats = device.supported_output_formats().expect("No supported output formats!");
-    for format in supported_formats {
-        println!("\tSupported format: {:?}", format);
-    }
+
+    let device_format = match matches.opt_str("s") {
+        Some(s) => {
+            let mut supported_formats = device.supported_output_formats().expect("No supported output formats!");
+            match supported_formats.find(|f| f.max_sample_rate.0 == s.parse::<u32>().expect("Specified sample rate is not an integer")) {
+                Some(f) => f.with_max_sample_rate(),
+                None => device.default_output_format().expect("No default output format!")
+            }
+        },
+        None => device.default_output_format().expect("No default output format!")
+    };
+
+
+    println!("Output format: {:?}", device_format);
 
     let sink = Sink::new(&device);
     let source_stream = AudioStream::new(rx);
