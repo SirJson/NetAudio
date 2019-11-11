@@ -15,14 +15,18 @@ fn main() -> std::io::Result<()> {
     opts.optopt("t", "target", "the target audio server", "IP");
     opts.optopt("p", "port", "the target port", "PORT");
     opts.optflag("h", "help", "print this help menu");
+    opts.optflag("d", "debug", "debug mode");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
         Err(f) => { panic!(f.to_string()) }
     };
+
     if matches.opt_present("h") {
         print_usage(&program, opts);
         return Ok(())
     }
+
+    let debug_mode = matches.opt_present("d");
 
     let ip = match matches.opt_str("t") {
         Some(i) => i,
@@ -75,21 +79,39 @@ fn main() -> std::io::Result<()> {
             } => {
                 let mut pkg = vec![0; buffer.len() * 2];
                 NetworkEndian::write_u16_into(&buffer, pkg.as_mut_slice());
-                socket.send(&pkg).expect("Failed to send package");
+                if let Err(e) = socket.send(&pkg) {
+                    println!("Failed to send package: {}",e);
+                }
+
+                if debug_mode {
+                    println!("Send {} bytes", pkg.len());
+                }
             }
             cpal::StreamData::Input {
                 buffer: cpal::UnknownTypeInputBuffer::I16(buffer),
             } => {
                 let mut pkg = vec![0; buffer.len() * 2];
                 NetworkEndian::write_i16_into(&buffer, pkg.as_mut_slice());
-                socket.send(&pkg).expect("Failed to send package");
+                if let Err(e) = socket.send(&pkg) {
+                    println!("Failed to send package: {}",e);
+                }
+
+                if debug_mode {
+                    println!("Send {} bytes", pkg.len());
+                }
             }
             cpal::StreamData::Input {
                 buffer: cpal::UnknownTypeInputBuffer::F32(buffer),
             } => {
                 let mut pkg = vec![0; buffer.len() * 4];
                 NetworkEndian::write_f32_into(&buffer, pkg.as_mut_slice());
-                socket.send(&pkg).expect("Failed to send package");
+                if let Err(e) = socket.send(&pkg) {
+                    println!("Failed to send package: {}",e);
+                }
+
+                if debug_mode {
+                    println!("Send {} bytes", pkg.len());
+                }
             }
             _ => (),
         }
