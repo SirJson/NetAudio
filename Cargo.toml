@@ -1,4 +1,3 @@
 [workspace]
 
-
-members = ["audio_renderer", "audio_source"]
+members = ["netaudio-renderer", "netaudio-source"]

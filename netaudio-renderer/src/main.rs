@@ -1,12 +1,13 @@
 use byteorder::{ByteOrder, NetworkEndian};
 use rodio::Sink;
-use cpal::SampleFormat;
 use rodio::{Sample, Source, source::UniformSourceIterator};
 use std::collections::VecDeque;
 use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
+use cpal::traits::DeviceTrait;
+use cpal::SampleFormat;
 use getopts;
 
 type SampleType = f32;
@@ -75,7 +76,7 @@ fn print_usage(program: &str, opts: getopts::Options) {
 
 fn print_capabilities() {
     let device = rodio::default_output_device().expect("Failed to select default output device");
-    println!("Output Device: {}",device.name());
+    println!("Output Device: {:?}",device.name());
     let device_format = device.default_output_format().expect("No default output format!");
     println!("Default format: {:?}", device_format);
     let supported_formats = device.supported_output_formats().expect("No supported output formats!");
@@ -133,7 +134,7 @@ fn main() -> std::io::Result<()> {
     let mut buffer = Box::new([0; UDP_BUFFER_SIZE]);
 
     let device = rodio::default_output_device().expect("Failed to select default output device");
-    println!("Output Device: {}",device.name());
+    println!("Output Device: {:?}",device.name());
 
     let device_format = match matches.opt_str("s") {
         Some(s) => {
