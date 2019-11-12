@@ -102,6 +102,7 @@ fn main() -> std::io::Result<()> {
     opts.optopt("p", "port", "port the server will bind to", "PORT");
     opts.optopt("s", "samplerate", "specifies the output sample rate if supported", "SAMPLERATE");
     opts.optflag("c", "capabilities", "prints a list of all possible formats of the default device");
+    opts.optflag("d", "no downsample or upsample", "disables the resampling of input");
     opts.optflag("h", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
@@ -126,6 +127,7 @@ fn main() -> std::io::Result<()> {
         Some(i) => i,
         None => "11331".to_owned()
     };
+    
 
     let netaddr = format!("{}:{}",ip,port);
 
@@ -152,15 +154,24 @@ fn main() -> std::io::Result<()> {
 
     let sink = Sink::new(&device);
     let source_stream = AudioStream::new(rx);
-    let stream = UniformSourceIterator::<AudioStream,SampleType>::new(source_stream, device_format.channels, device_format.sample_rate.0);
+
+    if matches.opt_present("d") {
+        match device_format.data_type {
+            SampleFormat::F32 => sink.append(source_stream.convert_samples::<f32>()),
+            SampleFormat::I16 => sink.append(source_stream.convert_samples::<i16>()),
+            SampleFormat::U16 => sink.append(source_stream.convert_samples::<u16>())
+        }
+    }
+    else {
+        let a = UniformSourceIterator::<AudioStream,SampleType>::new(source_stream, device_format.channels, device_format.sample_rate.0);
+        match device_format.data_type {
+            SampleFormat::F32 => sink.append(a.convert_samples::<f32>()),
+            SampleFormat::I16 => sink.append(a.convert_samples::<i16>()),
+            SampleFormat::U16 => sink.append(a.convert_samples::<u16>())
+        }
+    }
     println!("Binding to address: {}",netaddr);
     let socket = UdpSocket::bind(netaddr).expect("Failed to bind network address");
-    
-    match device_format.data_type {
-        SampleFormat::F32 => sink.append(stream.convert_samples::<f32>()),
-        SampleFormat::I16 => sink.append(stream.convert_samples::<i16>()),
-        SampleFormat::U16 => sink.append(stream.convert_samples::<u16>())
-    }
     sink.play();
 
     let mut now = std::time::Instant::now();
