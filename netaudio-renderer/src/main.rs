@@ -1,14 +1,14 @@
 use byteorder::{ByteOrder, NetworkEndian};
 use rodio::Sink;
 use rodio::{Sample, Source, source::UniformSourceIterator};
-use std::collections::VecDeque;
 use std::net::UdpSocket;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 use std::time::Duration;
 use cpal::traits::DeviceTrait;
 use cpal::SampleFormat;
 use getopts;
+use crossbeam_queue::{SegQueue};
+
 
 type SampleType = f32;
 const UDP_BUFFER_SIZE: usize = 65507;
@@ -20,31 +20,29 @@ struct Config {
 }
 
 struct AudioStream {
-    data: VecDeque<SampleType>,
-    receiver: Receiver<Vec<SampleType>>,
+    data: Arc<SegQueue<SampleType>>
 }
 
 impl AudioStream {
-    fn new(receiver: Receiver<Vec<SampleType>>) -> Self {
+    fn new() -> Self {
         AudioStream {
-            data: VecDeque::new(),
-            receiver,
+            data: Arc::new(SegQueue::new())
         }
     }
+    
+    fn buffer(&self) ->  Arc<SegQueue<SampleType>> {
+        self.data.clone()
+    }
+
 }
 
 impl Iterator for AudioStream {
     type Item = SampleType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Ok(sample) = self.receiver.try_recv() {
-            self.data.extend(&sample);
-        }
-        let out = self.data.pop_front();
-        if out == None {
-            Some(Self::Item::zero_value())
-        } else {
-            out
+        match self.data.pop() {
+            Ok(a) => Some(a),
+            Err(_) => Some(Self::Item::zero_value())
         }
     }
 }
@@ -132,7 +130,6 @@ fn main() -> std::io::Result<()> {
     let netaddr = format!("{}:{}",ip,port);
 
     println!("NetAudio Server v1.0");
-    let (tx, rx): (Sender<Vec<SampleType>>, Receiver<Vec<SampleType>>) = mpsc::channel();
     let mut buffer = Box::new([0; UDP_BUFFER_SIZE]);
 
     let device = rodio::default_output_device().expect("Failed to select default output device");
@@ -153,7 +150,8 @@ fn main() -> std::io::Result<()> {
     println!("Output format: {:?}", device_format);
 
     let sink = Sink::new(&device);
-    let source_stream = AudioStream::new(rx);
+    let source_stream = AudioStream::new();
+    let targetbuffer = source_stream.buffer();
 
     if matches.opt_present("d") {
         match device_format.data_type {
@@ -195,8 +193,8 @@ fn main() -> std::io::Result<()> {
             }
             let mut target: Vec<f32> = vec![0.0; bytes_recv / 4];
             NetworkEndian::read_f32_into(&source, &mut target);
-            if let Err(e) = tx.send(target) {
-                panic!("Internal error: {}", e);
+            for i in target {
+                targetbuffer.push(i);
             }
         }
     }
