@@ -1,6 +1,9 @@
 use byteorder::{ByteOrder, NetworkEndian};
-use cpal::traits::{DeviceTrait, EventLoopTrait, HostTrait};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::net::UdpSocket;
+use std::sync::{Arc, Mutex};
+use num_traits::Num;
+
 
 fn print_usage(program: &str, opts: getopts::Options) {
     let brief = format!("Usage: {} [options]", program);
@@ -46,6 +49,8 @@ fn main() -> std::io::Result<()> {
     socket
         .connect(netaddr)
         .expect("connect function failed");
+    let socket = Arc::new(Mutex::new(socket));
+    let work_socket = socket.clone();
 
     println!("Start stream..");
 
@@ -56,64 +61,34 @@ fn main() -> std::io::Result<()> {
     let device = host
         .default_output_device()
         .expect("Failed to get default output device");
-    println!("Default input device: {}", device.name().unwrap());
-    let format = device
-        .default_output_format()
-        .expect("Failed to get default output format");
-    println!("Default input format: {:?}", format);
-    let event_loop = host.event_loop();
-    let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
-    event_loop.play_stream(stream_id).unwrap();
-    event_loop.run(move |id, event| {
-        let data = match event {
-            Ok(data) => data,
-            Err(err) => {
-                eprintln!("an error occurred on stream {:?}: {}", id, err);
-                return;
-            }
-        };
-        // Otherwise write to the wav writer.
-        match data {
-            cpal::StreamData::Input {
-                buffer: cpal::UnknownTypeInputBuffer::U16(buffer),
-            } => {
-                let mut pkg = vec![0; buffer.len() * 2];
-                NetworkEndian::write_u16_into(&buffer, pkg.as_mut_slice());
-                if let Err(e) = socket.send(&pkg) {
-                    println!("Failed to send package: {}",e);
-                }
+    println!("Default output device: {}", device.name().unwrap());
 
-                if debug_mode {
-                    println!("Send {} bytes", pkg.len());
-                }
-            }
-            cpal::StreamData::Input {
-                buffer: cpal::UnknownTypeInputBuffer::I16(buffer),
-            } => {
-                let mut pkg = vec![0; buffer.len() * 2];
-                NetworkEndian::write_i16_into(&buffer, pkg.as_mut_slice());
-                if let Err(e) = socket.send(&pkg) {
-                    println!("Failed to send package: {}",e);
-                }
+    let config = device.default_input_config().unwrap();
+    println!("Default input config: {:?}", config);
 
-                if debug_mode {
-                    println!("Send {} bytes", pkg.len());
-                }
-            }
-            cpal::StreamData::Input {
-                buffer: cpal::UnknownTypeInputBuffer::F32(buffer),
-            } => {
-                let mut pkg = vec![0; buffer.len() * 4];
-                NetworkEndian::write_f32_into(&buffer, pkg.as_mut_slice());
-                if let Err(e) = socket.send(&pkg) {
-                    println!("Failed to send package: {}",e);
-                }
+    let err_fn = move |err| {
+        eprintln!("an error occurred on stream: {}", err);
+    };
 
-                if debug_mode {
-                    println!("Send {} bytes", pkg.len());
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::F32 => device.build_input_stream(&config.into(),  move |data, _: &_| write_input_data::<f32, f32>(data, &work_socket), err_fn)?,
+        cpal::SampleFormat::I16 => device.build_input_stream(&config.into(),  move |data, _: &_| write_input_data::<i16, i16>(data, &work_socket), err_fn)?,
+        cpal::SampleFormat::U16 => device.build_input_stream(&config.into(),  move |data, _: &_| write_input_data::<u16, u16>(data, &work_socket), err_fn)?,
+    };
+}
+
+fn write_input_data<T,U>(input: &[T], socket: &Arc<Mutex<UdpSocket>>)
+where
+    T: cpal::Sample,
+    U: cpal::Sample + Num
+{
+    if let Ok(mut socket) = socket.try_lock() {
+            for &sample in input.iter() {
+                let sample: U = cpal::Sample::from(&sample);
+                match(sample) {
+
                 }
             }
-            _ => (),
         }
-    });
+
 }

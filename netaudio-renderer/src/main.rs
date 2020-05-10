@@ -4,11 +4,10 @@ use rodio::{Sample, Source, source::UniformSourceIterator};
 use std::net::UdpSocket;
 use std::sync::Arc;
 use std::time::Duration;
-use cpal::traits::DeviceTrait;
 use cpal::SampleFormat;
 use getopts;
 use crossbeam_queue::{SegQueue};
-
+use cpal::traits::DeviceTrait;
 
 type SampleType = f32;
 const UDP_BUFFER_SIZE: usize = 65507;
@@ -29,7 +28,7 @@ impl AudioStream {
             data: Arc::new(SegQueue::new())
         }
     }
-    
+
     fn buffer(&self) ->  Arc<SegQueue<SampleType>> {
         self.data.clone()
     }
@@ -125,7 +124,7 @@ fn main() -> std::io::Result<()> {
         Some(i) => i,
         None => "11331".to_owned()
     };
-    
+
 
     let netaddr = format!("{}:{}",ip,port);
 

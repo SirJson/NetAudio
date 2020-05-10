@@ -5,6 +5,7 @@ authors = ["Raffael Zica <raffael@pixeltastic.de>"]
 edition = "2018"
 
 [dependencies]
-byteorder = "1.3.2"
-cpal = {git = "https://github.com/lucy/cpal"}
+byteorder = "1.3.4"
+cpal = {git = "https://github.com/RustAudio/cpal"}
 getopts = "0.2"
+num-traits = "0.2"
